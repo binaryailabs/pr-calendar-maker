@@ -75,8 +75,11 @@
                 <button id="importBtn" class="bg-tm-yellow text-slate-800 hover:bg-opacity-90 px-4 py-2 rounded shadow transition text-sm font-medium flex items-center gap-2">
                     <i class="fa-solid fa-upload"></i> Import
                 </button>
-                <button id="exportBtn" class="bg-tm-maroon hover:bg-opacity-90 text-white px-4 py-2 rounded shadow transition text-sm font-medium flex items-center gap-2">
-                    <i class="fa-solid fa-download"></i> Export Data
+                <button id="exportBtn" class="bg-tm-maroon hover:bg-opacity-90 text-white px-4 py-2 rounded shadow transition text-sm font-medium flex items-center gap-2" title="Export as JSON for backup">
+                    <i class="fa-solid fa-download"></i> JSON
+                </button>
+                <button id="exportIcsBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition text-sm font-medium flex items-center gap-2" title="Download for Google Calendar/Outlook">
+                    <i class="fa-regular fa-calendar-plus"></i> Export .ics
                 </button>
                 <button id="clearBtn" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded shadow transition text-sm font-medium flex items-center gap-2">
                     <i class="fa-solid fa-trash-can"></i> Clear All
@@ -293,6 +296,7 @@
         const importBtn = document.getElementById('importBtn');
         const importFileInput = document.getElementById('importFile');
         const exportBtn = document.getElementById('exportBtn');
+        const exportIcsBtn = document.getElementById('exportIcsBtn');
         const clearBtn = document.getElementById('clearBtn');
 
         // Color mapping for event types
@@ -600,6 +604,65 @@
             showToast("Data exported successfully!");
         }
 
+        function exportToICS() {
+            if (events.length === 0) {
+                showToast("No data to export.", true);
+                return;
+            }
+
+            let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Toastmasters PR Calendar//EN\r\nCALSCALE:GREGORIAN\r\n";
+
+            events.forEach(event => {
+                // Parse date and create DTSTART / DTEND (all day event needs +1 day for end)
+                const startDate = new Date(event.date);
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + 1);
+
+                const formatIcsDate = (date) => {
+                    const yyyy = date.getFullYear();
+                    const mm = String(date.getMonth() + 1).padStart(2, '0');
+                    const dd = String(date.getDate()).padStart(2, '0');
+                    return `${yyyy}${mm}${dd}`;
+                };
+
+                const dtStart = formatIcsDate(startDate);
+                const dtEnd = formatIcsDate(endDate);
+
+                // Escape special characters in strings for ICS format
+                const escapeIcsText = (str) => {
+                    if (!str) return "";
+                    return str.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+                };
+
+                const title = escapeIcsText(event.title);
+                const description = escapeIcsText(`Activity Type: ${typeLabels[event.type] || event.type}\\n\\nNotes: ${event.notes || 'None'}`);
+
+                icsContent += "BEGIN:VEVENT\r\n";
+                icsContent += `UID:${event.id}@toastmasters-pr.local\r\n`;
+                icsContent += `DTSTAMP:${formatIcsDate(new Date())}T000000Z\r\n`;
+                icsContent += `DTSTART;VALUE=DATE:${dtStart}\r\n`;
+                icsContent += `DTEND;VALUE=DATE:${dtEnd}\r\n`;
+                icsContent += `SUMMARY:${title}\r\n`;
+                icsContent += `DESCRIPTION:${description}\r\n`;
+                icsContent += "STATUS:CONFIRMED\r\n";
+                icsContent += "END:VEVENT\r\n";
+            });
+
+            icsContent += "END:VCALENDAR";
+
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", url);
+            downloadAnchorNode.setAttribute("download", "toastmasters_pr_calendar.ics");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            URL.revokeObjectURL(url);
+
+            showToast("Calendar (.ics) downloaded successfully!");
+        }
+
         function importData(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -697,6 +760,7 @@
         importBtn.addEventListener('click', () => importFileInput.click());
         importFileInput.addEventListener('change', importData);
         exportBtn.addEventListener('click', exportData);
+        exportIcsBtn.addEventListener('click', exportToICS);
         clearBtn.addEventListener('click', clearAllData);
 
         // Seed some sample data if completely empty on first load to make preview look good
